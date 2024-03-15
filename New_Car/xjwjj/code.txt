@@ -1,0 +1,1849 @@
+###########################################################################
+#代码说明
+#文章架构：
+#代码分为主函数（main.py）、藏宝图识别（FindTreasureXY.py）、路径规划(FindNearestTreasure.py)、宝藏识别(JudgeTreasure.py)、运动控制(MoveControl.py)五个部分
+############################################################
+#mian函数主要功能：搭建整个程序运行的框架，对各个函数进行导入，从而完成整个程序的运行。
+
+
+import FindNearestTreasure
+import os
+import MoveControl
+from FindTreasureXY import findTreasureXY
+from FindNearestTreasure import TreasureDetector
+from JudgeTreasure import judgeTreasure
+import time
+import cv2
+import numpy as np
+
+
+
+
+pathList4Draw = list()
+END = 0
+numPart = 1
+
+
+#treasure_list, teamColor = [[17, 17], [15, 11], [15, 5], [13, 9], [7, 11], [5, 15], [5, 9], [3, 3]], 1
+FfindTreasureXY = findTreasureXY()
+treasure_list = FfindTreasureXY[0]
+teamColor  = FfindTreasureXY[1]
+
+
+
+TD = TreasureDetector(0)
+TD.classifyXY(treasure_list)
+
+
+
+#def judgeTreasure():
+#    global i
+#    if i == 1:
+#        i = i + 1
+#        return 2
+#    if i == 2:
+#        i = i + 1
+#        return 1
+#    if i == 3:
+#        i = i + 1
+#        return 3
+#    if i == 4:
+#        i = i + 1
+#        return 1
+#    if i == 5:
+#        i = i + 1
+#        return 1
+#    if i == 6:
+#        i = i + 1
+#        return 1
+
+
+treasurePath, orientPath = TD.findNearestTreasurePoint(numPart, FindNearestTreasure.BEGIN_POINT_X,
+    FindNearestTreasure.BEGIN_POINT_Y)
+pathList4Draw.append(treasurePath)
+MoveControl.move(orientPath)
+#time.sleep(2)
+print("TNT")
+cvResult = judgeTreasure()
+print("QwQ")
+print(cvResult)
+
+MoveControl.cvResultMove(cvResult, teamColor=teamColor)
+print("###")
+carResult = TD.updateMazeMap(numPart, cvResult, treasurePath[len(treasurePath) - 1], teamColor, treasurePath[len(treasurePath) - 2])
+
+
+while 1:
+    numPart, directX, directY, path, convertPath = carResult
+    pathList4Draw.append(path)
+    MoveControl.move(convertPath)
+    #time.sleep(2)
+    cvResult = judgeTreasure()
+    print(cvResult)
+    MoveControl.cvResultMove(cvResult, teamColor=teamColor)
+    carResult = TD.updateMazeMap(numPart, cvResult, path[len(path) - 1], teamColor, path[len(path) - 2])
+
+    # 最后一段路
+    if carResult[0] == END:
+        _, _, _, path, convertPath = carResult
+        pathList4Draw.append(path)  # 画图功能，可以注释掉。
+        MoveControl.move(convertPath)
+        break
+
+Distance：
+#用于在树莓派上使用超声波传感器测量距
+#离的Python代码。它使用RPi.GPIO库来控制树莓派的GPIO引脚，以便触发超声波测距模块并接收回波以计算距离。
+#导入必要的库和模块：
+#RPi.GPIO：用于树莓派的GPIO控制库。
+#time：用于处理时间的标准Python库。
+#设置GPIO编码方式和GPIO口的初始化：
+#EchoPin和TrigPin变量定义了超声波传感器的回波引脚和触发引脚的引脚编号。
+#GPIO.setmode(GPIO.BOARD)将GPIO口的编码方式设置为BOARD，这表示你将使用物理引脚编号来引用GPIO口。
+#设置GPIO口的工作模式：
+#GPIO.setup(EchoPin, GPIO.IN)将EchoPin设置为输入模式，用于接收超声波的回波信号。
+#GPIO.setup(TrigPin, GPIO.OUT)将TrigPin设置为输出模式，用于触发超声波传感器。
+#Distance函数：
+#这是测量距离的主要功能。它通过发出一个短脉冲来触发超声波传感器，然后计算回波的时间来估算距离。函数返回距离的值（单位：厘米）。
+#Distance_test函数：
+#这个函数执行了多次测量，并返回多次测量的平均值。
+#循环5次测量，排除了可能的异常值。
+#计算并返回三次有效测量的平均距离值。
+
+# -*- coding:UTF-8 -*-
+import RPi.GPIO as GPIO
+import time
+
+GPIO.setwarnings(False)
+
+EchoPin = 18
+TrigPin = 16
+
+# 设置GPIO口为BCM编码方式
+GPIO.setmode(GPIO.BOARD)
+
+GPIO.setup(EchoPin, GPIO.IN)
+GPIO.setup(TrigPin, GPIO.OUT)
+
+
+# 超声波函数
+def Distance():
+    GPIO.output(TrigPin, GPIO.LOW)
+    time.sleep(0.000002)
+    GPIO.output(TrigPin, GPIO.HIGH)
+    time.sleep(0.000015)
+    GPIO.output(TrigPin, GPIO.LOW)
+
+    t3 = time.time()
+
+    while not GPIO.input(EchoPin):
+        t4 = time.time()
+        if (t4 - t3) > 0.03:
+            return -1
+    t1 = time.time()
+    while GPIO.input(EchoPin):
+        t5 = time.time()
+        if (t5 - t1) > 0.03:
+            return -1
+
+    t2 = time.time()
+    time.sleep(0.01)
+    print ("distance_1 is %d " % (((t2 - t1)* 340 / 2) * 100))
+    return ((t2 - t1) * 340 / 2) * 100
+
+
+def Distance_test():
+    num = 0
+    ultrasonic = []
+    while num < 5:
+        distance = Distance()
+        # print("distance is %f"%(distance) )
+        while int(distance) == -1:
+            distance = Distance()
+            # print("Tdistance is %f"%(distance) )
+        while int(distance) >= 500 or int(distance) == 0:
+            distance = Distance()
+            # print("Edistance is %f"%(distance) )
+        ultrasonic.append(distance)
+        num = num + 1
+        time.sleep(0.01)
+    distance = (ultrasonic[1] + ultrasonic[2] + ultrasonic[3]) / 3
+    print("distance is %f" % distance)
+    return distance
+#Distance_test()
+
+FindNearestTreasure：#从MazeMap和MoveControl模块中导入内容。
+#从Python的内建库中导入deepcopy
+#常量定义:
+#有关迷宫的起点、终点、宝藏类别、方向和旋转方向的常量定义。
+#迷宫地图:
+#使用deepcopy复制MazeMap模块中定义的MAP。
+#查找函数:
+#findImportantPoints(): 用于找到迷宫中的岔路口。
+#find2WallsPoints(): 查找有两面墙的点。
+#findSymmetricalPoint(): 返回输入点的中心对称点。
+
+import MazeMap
+import MoveControl
+from copy import deepcopy
+
+BEGIN_POINT_X = 19
+BEGIN_POINT_Y = 1
+END_POINT_X = 1
+END_POINT_Y = 19
+# 象限
+FIRST = 1
+SECOND = 2
+THIRD = 3
+FOURTH = 4
+# 宝藏类别
+TRUE_RED = 1
+TRUE_BLUE = 2
+FALSE_RED = 3
+FALSE_BLUE = 4
+# 方向
+UP = 0
+RIGHT = 1
+DOWN = 2
+LEFT = 3
+# 旋转方向
+GO_STRAIGHT = 0
+TURN_RIGHT = 1
+TURN_LEFT = 3
+
+mazeMap = deepcopy(MazeMap.MAP)  # 迷宫地图
+Red = 1
+Blue = 2
+
+
+# 找出岔路口的点
+def findImportantPoints():
+    MAP = MazeMap.MAP
+    importantList = list()
+    for x in range(1, 20):
+        for y in range(1, 20):
+            count = 0
+            if MAP[x][y] == 1:
+                continue
+            if MAP[x - 1][y] == 0:
+                count = count + 1
+            if MAP[x][y + 1] == 0:
+                count = count + 1
+            if MAP[x + 1][y] == 0:
+                count = count + 1
+            if MAP[x][y - 1] == 0:
+                count = count + 1
+            if count > 2:
+                importantList.append([x, y])
+    return importantList
+
+
+# 找出两面墙的点
+def find2WallsPoints():
+    MAP = MazeMap.MAP
+    twoWallsPointsList = list()
+    for x in range(1, 20):
+        for y in range(1, 20):
+            count = 0
+            if MAP[x][y] == 1:
+                continue
+            if MAP[x - 1][y] == 0:
+                count = count + 1
+            if MAP[x][y + 1] == 0:
+                count = count + 1
+            if MAP[x + 1][y] == 0:
+                count = count + 1
+            if MAP[x][y - 1] == 0:
+                count = count + 1
+            if count == 2:
+                twoWallsPointsList.append([x, y])
+    return twoWallsPointsList
+
+
+def findSymmetricalPoint(input_x, input_y):  # 找到中心对称的点
+    return 20 - input_x, 20 - input_y
+
+
+def setAnotherPathBlock(xy, nearXY):
+    x = xy[0]
+    y = xy[1]
+    # anotherX = nearXY[0]
+    # anotherY = nearXY[1]
+    MAP = MazeMap.MAP
+    if MAP[x - 1][y] == 0 and [x - 1, y] != nearXY:
+        mazeMap[x - 1][y] = 1
+    elif MAP[x][y + 1] == 0 and [x, y + 1] != nearXY:
+        mazeMap[x][y + 1] = 1
+    elif MAP[x + 1][y] == 0 and [x + 1, y] != nearXY:
+        mazeMap[x + 1][y] = 1
+    elif MAP[x][y - 1] == 0 and [x, y - 1] != nearXY:
+        mazeMap[x][y - 1] = 1
+
+
+class TreasureDetector:
+    def __init__(self, count):
+        self.count = count
+        self.Intersection_coordinates = findImportantPoints()
+        self.twoWallsPoints = find2WallsPoints()
+        self.firstQuadrantList = list()
+        self.secondQuadrantList = list()
+        self.thirdQuadrantList = list()
+        self.fourthQuadrantList = list()
+        # 尝试寻找最短路径的存储数据结构
+        self.searchPath = list()
+        self.orientPath = list()
+
+    def classifyXY(self, treasure_list):  # 对于找到的宝藏坐标list进行象限的分类
+        for xy in treasure_list:
+            x, y = xy
+            if x > 10 > y:
+                self.firstQuadrantList.append(xy)
+            if x > 10 and y > 10:
+                self.secondQuadrantList.append(xy)
+            if x < 10 and y < 10:
+                self.thirdQuadrantList.append(xy)
+            if x < 10 < y:
+                self.fourthQuadrantList.append(xy)
+
+    def findOneQuadrantXY(self, num):  # 返回某个象限的XY坐标的list
+        if num == 1:
+            return self.firstQuadrantList
+        if num == 2:
+            return self.secondQuadrantList
+        if num == 3:
+            return self.thirdQuadrantList
+        if num == 4:
+            return self.fourthQuadrantList
+
+    def updateMazeMap(self, numPart, cvResult, xy, teamColor, nearXY):  # 更新mazeMap
+        x, y = xy
+        mazeMap[x][y] = 1
+        if self.twoWallsPoints.count(xy) == 1:
+            setAnotherPathBlock(xy, nearXY)
+        if cvResult is None:
+            print("该点宝物识别失败或无宝物")
+            MoveControl.turnBack()
+        convX, convY = findSymmetricalPoint(x, y)
+        if teamColor == Red:
+            if numPart == FIRST:
+                if cvResult == TRUE_RED:
+                    self.firstQuadrantList.remove([x, y])
+                    self.count = self.count + 1
+                    if len(self.firstQuadrantList) == 0:
+                        path, convertPath = self.findNearestTreasurePoint(SECOND, x, y)
+                        nextX, nextY = path[len(path) - 1]
+                        return [SECOND, nextX, nextY, path, convertPath]
+                    anotherX, anotherY = self.firstQuadrantList.pop()
+                    mazeMap[anotherX][anotherY] = 1
+                    self.fourthQuadrantList.remove([convX, convY])
+                    mazeMap[convX][convY] = 1
+                    path, convertPath = self.findNearestTreasurePoint(SECOND, x, y)
+                    nextX, nextY = path[len(path) - 1]
+                    return [SECOND, nextX, nextY, path, convertPath]
+                if cvResult == FALSE_RED or cvResult is None:
+                    self.firstQuadrantList.remove([x, y])
+                    if len(self.firstQuadrantList) == 0:
+                        path, convertPath = self.findNearestTreasurePoint(SECOND, x, y)
+                        nextX, nextY = path[len(path) - 1]
+                        return [SECOND, nextX, nextY, path, convertPath]
+                    anotherX, anotherY = self.firstQuadrantList.pop()
+                    mazeMap[anotherX][anotherY] = 1
+                    self.fourthQuadrantList.remove([convX, convY])
+                    mazeMap[convX][convY] = 1
+                    path, convertPath = self.findNearestTreasurePoint(SECOND, x, y)
+                    nextX, nextY = path[len(path) - 1]
+                    return [SECOND, nextX, nextY, path, convertPath]
+                if cvResult == TRUE_BLUE or cvResult is None:
+                    self.firstQuadrantList.remove([x, y])
+                    anotherX, anotherY = self.firstQuadrantList[0]
+                    fourthX, fourthY = self.fourthQuadrantList.pop(1 - self.fourthQuadrantList.index([convX, convY]))
+                    mazeMap[fourthX][fourthY] = 1
+                    path, convertPath = self.findPath(x, y, anotherX, anotherY)
+                    return [FIRST, anotherX, anotherY, path, convertPath]
+                if cvResult == FALSE_BLUE or cvResult is None:
+                    self.firstQuadrantList.remove([x, y])
+                    anotherX, anotherY = self.firstQuadrantList[0]
+                    fourthX, fourthY = self.fourthQuadrantList.pop(1 - self.fourthQuadrantList.index([convX, convY]))
+                    mazeMap[fourthX][fourthY] = 1
+                    #fourthX, fourthY = self.fourthQuadrantList.pop(0)
+                    #mazeMap[fourthX][fourthY] = 1
+                    #fourthX, fourthY = self.fourthQuadrantList.pop(0)
+                    #mazeMap[fourthX][fourthY] = 1
+                    path, convertPath = self.findPath(x, y, anotherX, anotherY)
+                    return [FIRST, anotherX, anotherY, path, convertPath]
+            if numPart == SECOND:
+                if cvResult == TRUE_RED:
+                    self.secondQuadrantList.remove([x, y])
+                    self.count = self.count + 1
+                    if len(self.secondQuadrantList) == 0:
+                        if len(self.thirdQuadrantList) == 0:
+                            path, convertPath = self.findNearestTreasurePoint(FOURTH, x, y)
+                            nextX, nextY = path[len(path) - 1]
+                            return [THIRD, nextX, nextY, path, convertPath]
+                        else:
+                            path, convertPath = self.findNearestTreasurePoint(THIRD, x, y)
+                            nextX, nextY = path[len(path) - 1]
+                            return [THIRD, nextX, nextY, path, convertPath]
+                    else:
+                        anotherX, anotherY = self.secondQuadrantList.pop()
+                        mazeMap[anotherX][anotherY] = 1
+                        self.thirdQuadrantList.remove([convX, convY])
+                        mazeMap[convX][convY] = 1
+                        nextX, nextY = self.thirdQuadrantList[0]
+                        path, convertPath = self.findNearestTreasurePoint(THIRD, x, y)
+                        return [THIRD, nextX, nextY, path, convertPath]
+                if cvResult == FALSE_RED:
+                    self.secondQuadrantList.remove([x, y])
+                    if len(self.secondQuadrantList) == 0:
+                        path, convertPath = self.findNearestTreasurePoint(THIRD, x, y)
+                        nextX, nextY = path[len(path) - 1]
+                        return [THIRD, nextX, nextY, path, convertPath]
+                    else:
+                        anotherX, anotherY = self.secondQuadrantList.pop()
+                        mazeMap[anotherX][anotherY] = 1
+                        self.thirdQuadrantList.remove([convX, convY])
+                        mazeMap[convX][convY] = 1
+                        nextX, nextY = self.thirdQuadrantList[0]
+                        path, convertPath = self.findNearestTreasurePoint(THIRD, x, y)
+                        return [THIRD, nextX, nextY, path, convertPath]
+                if cvResult == TRUE_BLUE or cvResult is None:
+                    self.secondQuadrantList.remove([x, y])
+                    thirdX, thirdY = self.thirdQuadrantList.pop(1 - self.thirdQuadrantList.index([convX, convY]))
+                    mazeMap[thirdX][thirdY] = 1
+                    anotherX, anotherY = self.secondQuadrantList[0]
+                    path, convertPath = self.findPath(x, y, anotherX, anotherY)
+                    return [SECOND, anotherX, anotherY, path, convertPath]
+                if cvResult == FALSE_BLUE or cvResult is None:
+                    self.secondQuadrantList.remove([x, y])
+                    #mazeMap[convX][convY] = 1
+                    #thirdX, thirdY = self.thirdQuadrantList.pop(0)
+                    #mazeMap[thirdX][thirdY] = 1
+                    # 获取 self.thirdQuadrantList 中与 [convX, convY] 这个坐标不同的第一个坐标 [thirdX, thirdY]
+                    thirdX, thirdY = self.thirdQuadrantList.pop(1 - self.thirdQuadrantList.index([convX, convY]))
+                    # 在迷宫地图的坐标 [thirdX, thirdY] 处设置为 1
+                    mazeMap[thirdX][thirdY] = 1
+                    anotherX, anotherY = self.secondQuadrantList[0]
+                    path, convertPath = self.findPath(x, y, anotherX, anotherY)
+                    return [SECOND, anotherX, anotherY, path, convertPath]
+            if numPart == THIRD:
+                if cvResult == TRUE_RED:
+                    self.thirdQuadrantList.remove([x, y])
+                    self.count = self.count + 1
+                    if self.count == 3:
+                        path, convertPath = self.findPath(x, y, END_POINT_X, END_POINT_Y)
+                        return [0, END_POINT_X, END_POINT_Y, path, convertPath]
+                    path, convertPath = self.findNearestTreasurePoint(FOURTH, x, y)
+                    nextX, nextY = path[len(path) - 1]
+                    return [FOURTH, nextX, nextY, path, convertPath]
+                if cvResult == TRUE_BLUE or cvResult == FALSE_RED or cvResult == FALSE_BLUE or cvResult is None:
+                    self.thirdQuadrantList.remove([x, y])
+                    path, convertPath = self.findNearestTreasurePoint(FOURTH, x, y)
+                    nextX, nextY = path[len(path) - 1]
+                    return [FOURTH, nextX, nextY, path, convertPath]
+            if numPart == FOURTH or cvResult is None:
+                if cvResult == TRUE_RED:
+                    self.fourthQuadrantList.remove([x, y])
+                    path, convertPath = self.findPath(x, y, END_POINT_X, END_POINT_Y)
+                    return [0, END_POINT_X, END_POINT_Y, path, convertPath]
+        if teamColor == Blue:
+            if numPart == FIRST:
+                if cvResult == TRUE_BLUE:
+                    self.firstQuadrantList.remove([x, y])
+                    self.count = self.count + 1
+                    if len(self.firstQuadrantList) == 0:
+                        path, convertPath = self.findNearestTreasurePoint(SECOND, x, y)
+                        nextX, nextY = path[len(path) - 1]
+                        return [SECOND, nextX, nextY, path, convertPath]
+                    anotherX, anotherY = self.firstQuadrantList.pop()
+                    mazeMap[anotherX][anotherY] = 1
+                    self.fourthQuadrantList.remove([convX, convY])
+                    mazeMap[convX][convY] = 1
+                    path, convertPath = self.findNearestTreasurePoint(SECOND, x, y)
+                    nextX, nextY = path[len(path) - 1]
+                    return [SECOND, nextX, nextY, path, convertPath]
+                if cvResult == FALSE_BLUE or cvResult is None:
+                    self.firstQuadrantList.remove([x, y])
+                    if len(self.firstQuadrantList) == 0:
+                        path, convertPath = self.findNearestTreasurePoint(SECOND, x, y)
+                        nextX, nextY = path[len(path) - 1]
+                        return [SECOND, nextX, nextY, path, convertPath]
+                    anotherX, anotherY = self.firstQuadrantList.pop()
+                    mazeMap[anotherX][anotherY] = 1
+                    self.fourthQuadrantList.remove([convX, convY])
+                    mazeMap[convX][convY] = 1
+                    path, convertPath = self.findNearestTreasurePoint(SECOND, x, y)
+                    nextX, nextY = path[len(path) - 1]
+                    return [SECOND, nextX, nextY, path, convertPath]
+                if cvResult == TRUE_RED or cvResult is None:
+                    self.firstQuadrantList.remove([x, y])
+                    anotherX, anotherY = self.firstQuadrantList[0]
+                    fourthX, fourthY = self.fourthQuadrantList.pop(1 - self.fourthQuadrantList.index([convX, convY]))
+                    mazeMap[fourthX][fourthY] = 1
+                    path, convertPath = self.findPath(x, y, anotherX, anotherY)
+                    return [FIRST, anotherX, anotherY, path, convertPath]
+                if cvResult == FALSE_RED or cvResult is None:
+                    self.firstQuadrantList.remove([x, y])
+                    anotherX, anotherY = self.firstQuadrantList[0]
+                    #fourthX, fourthY = self.fourthQuadrantList.pop(0)
+                    fourthX, fourthY = self.fourthQuadrantList.pop(1 - self.fourthQuadrantList.index([convX, convY]))
+                    mazeMap[fourthX][fourthY] = 1
+                    #fourthX, fourthY = self.fourthQuadrantList.pop(0)
+                   # mazeMap[fourthX][fourthY] = 1
+                    path, convertPath = self.findPath(x, y, anotherX, anotherY)
+                    return [FIRST, anotherX, anotherY, path, convertPath]
+            if numPart == SECOND:
+                if cvResult == TRUE_BLUE:
+                    self.secondQuadrantList.remove([x, y])
+                    self.count = self.count + 1
+                    if len(self.secondQuadrantList) == 0:
+                        if len(self.thirdQuadrantList) == 0:
+                            path, convertPath = self.findNearestTreasurePoint(FOURTH, x, y)
+                            nextX, nextY = path[len(path) - 1]
+                            return [FOURTH, nextX, nextY, path, convertPath]
+                        path, convertPath = self.findNearestTreasurePoint(THIRD, x, y)
+                        nextX, nextY = path[len(path) - 1]
+                        return [THIRD, nextX, nextY, path, convertPath]
+                    anotherX, anotherY = self.secondQuadrantList.pop()
+                    mazeMap[anotherX][anotherY] = 1
+                    self.thirdQuadrantList.remove([convX, convY])
+                    mazeMap[convX][convY] = 1
+                    nextX, nextY = self.thirdQuadrantList[0]
+                    path, convertPath = self.findNearestTreasurePoint(THIRD, x, y)
+                    return [THIRD, nextX, nextY, path, convertPath]
+                if cvResult == FALSE_BLUE:
+                    self.secondQuadrantList.remove([x, y])
+                    if len(self.secondQuadrantList) == 0:
+                        path, convertPath = self.findNearestTreasurePoint(THIRD, x, y)
+                        nextX, nextY = path[len(path) - 1]
+                        return [THIRD, nextX, nextY, path, convertPath]
+                    anotherX, anotherY = self.secondQuadrantList.pop()
+                    mazeMap[anotherX][anotherY] = 1
+                    self.thirdQuadrantList.remove([convX, convY])
+                    mazeMap[convX][convY] = 1
+                    nextX, nextY = self.thirdQuadrantList[0]
+                    path, convertPath = self.findNearestTreasurePoint(THIRD, x, y)
+                    return [THIRD, nextX, nextY, path, convertPath]
+                if cvResult == TRUE_RED or cvResult is None:
+                    self.secondQuadrantList.remove([x, y])
+                    thirdX, thirdY = self.thirdQuadrantList.pop(1 - self.thirdQuadrantList.index([convX, convY]))
+                    mazeMap[thirdX][thirdY] = 1
+                    anotherX, anotherY = self.secondQuadrantList[0]
+                    path, convertPath = self.findPath(x, y, anotherX, anotherY)
+                    return [SECOND, anotherX, anotherY, path, convertPath]
+                if cvResult == FALSE_RED or cvResult is None:
+                    self.secondQuadrantList.remove([x, y])
+                    mazeMap[convX][convY] = 1
+                    #thirdX, thirdY = self.thirdQuadrantList.pop(0)
+                    #mazeMap[thirdX][thirdY] = 1
+                    #thirdX, thirdY = self.thirdQuadrantList.pop(0)
+                    thirdX, thirdY = self.thirdQuadrantList.pop(1 - self.thirdQuadrantList.index([convX, convY]))
+                    mazeMap[thirdX][thirdY] = 1
+                    anotherX, anotherY = self.secondQuadrantList[0]
+                    path, convertPath = self.findPath(x, y, anotherX, anotherY)
+                    return [SECOND, anotherX, anotherY, path, convertPath]
+            if numPart == THIRD:
+                if cvResult == TRUE_BLUE:
+                    self.thirdQuadrantList.remove([x, y])
+                    self.count = self.count + 1
+                    if self.count == 3:
+                        path, convertPath = self.findPath(x, y, END_POINT_X, END_POINT_Y)
+                        return [0, END_POINT_X, END_POINT_Y, path, convertPath]
+                    path, convertPath = self.findNearestTreasurePoint(FOURTH, x, y)
+                    nextX, nextY = path[len(path) - 1]
+                    return [FOURTH, nextX, nextY, path, convertPath]
+                if cvResult == TRUE_RED or cvResult == FALSE_BLUE or cvResult == FALSE_RED or cvResult is None:
+                    self.thirdQuadrantList.remove([x, y])
+                    path, convertPath = self.findNearestTreasurePoint(FOURTH, x, y)
+                    nextX, nextY = path[len(path) - 1]
+                    return [FOURTH, nextX, nextY, path, convertPath]
+            if numPart == FOURTH:
+                if cvResult == TRUE_BLUE or cvResult is None:
+                    self.fourthQuadrantList.remove([x, y])
+                    path, convertPath = self.findPath(x, y, END_POINT_X, END_POINT_Y)
+                    return [0, END_POINT_X, END_POINT_Y, path, convertPath]
+
+    def findNearestTreasurePoint(self, numPart, beginX, beginY):  # 针对num象限进行搜索最近的路径的坐标点
+        index = 0  # 坐标点存储在list中的索引参数
+        father_point = -1  # 广度优先搜索的父节点索引参数
+        self.searchPath.clear()
+        self.searchPath.append([beginX, beginY, index, father_point])  # 将起点加入list
+        index += 1
+        newMap = deepcopy(mazeMap)
+        newMap[beginX][beginY] = 1  # 将加入list中的坐标对应的迷宫地图设置为1，表示此路已经经历过，不允许再次遍历
+        p = 0  # 表示队列中首指针的索引，用于出队（并非真出队，只是访问该点），同时也是广度优先子节点的父节点索引
+        chosenQuadrantList = self.findOneQuadrantXY(numPart)
+
+        while p != index:  # 队列不空就循环广度优先搜索
+            node = self.searchPath[p]
+            x, y, _, _ = node
+            # 遍历四周：若是路径可以走，则加入队列，若是目标点，则break跳出循环
+            if newMap[x - 1][y] == 0:
+                self.searchPath.append([x - 1, y, index, p])
+                index += 1
+                newMap[x - 1][y] = 1
+                if [x - 1, y] in chosenQuadrantList:
+                    break
+            if newMap[x][y + 1] == 0:
+                index += 1
+                self.searchPath.append([x, y + 1, index, p])
+                newMap[x][y + 1] = 1
+                if [x, y + 1] in chosenQuadrantList:
+                    break
+            if newMap[x + 1][y] == 0:
+                index += 1
+                self.searchPath.append([x + 1, y, index, p])
+                newMap[x + 1][y] = 1
+                if [x + 1, y] in chosenQuadrantList:
+                    break
+            if newMap[x][y - 1] == 0:
+                index += 1
+                self.searchPath.append([x, y - 1, index, p])
+                newMap[x][y - 1] = 1
+                if [x, y - 1] in chosenQuadrantList:
+                    break
+            p += 1  # 继续遍历下一个坐标
+        index -= 1  # 此时已经找到目标点
+        path = list()  # 用于保存真正的路径
+
+        node = self.searchPath[index]  # 反向去寻找父坐标，直到找到初始坐标
+        while node[3] != -1:
+            path.append([node[0], node[1]])
+            node = self.searchPath[node[3]]
+        path.append([node[0], node[1]])  # 初始坐标也加进来
+        path.reverse()  # 反转list，正向输出
+        print(path)
+        print("路径长度：", len(path), "到达点：", path[len(path) - 1])
+        convertPath = self.convert2OrientPath(deepcopy(path))
+        return path, convertPath  # , convertPath
+
+    def findPath(self, begin_x, begin_y, end_x, end_y):
+        index = 0  # 坐标点存储在list中的索引参数
+        father_point = -1  # 广度优先搜索的父节点索引参数
+        self.searchPath.clear()
+        self.searchPath.append([begin_x, begin_y, index, father_point])  # 将起点加入list
+        index += 1
+        newMap = deepcopy(mazeMap)
+        newMap[begin_x][begin_y] = 1  # 将加入list中的坐标对应的迷宫地图设置为1，表示此路已经经历过，不允许再次遍历
+        p = 0  # 表示队列中首指针的索引，用于出队（并非真出队，只是访问该点），同时也是广度优先子节点的父节点索引
+
+        while p != index:  # 队列不空就循环广度优先搜索
+            node = self.searchPath[p]
+            x = node[0]
+            y = node[1]
+            # 遍历四周：若是路径可以走，则加入队列，若是目标点，则break跳出循环
+            if newMap[x - 1][y] == 0:
+                self.searchPath.append([x - 1, y, index, p])
+                index += 1
+                newMap[x - 1][y] = 1
+                if x - 1 == end_x and y == end_y:
+                    break
+            if newMap[x][y + 1] == 0:
+                index += 1
+                self.searchPath.append([x, y + 1, index, p])
+                newMap[x][y + 1] = 1
+                if x == end_x and y + 1 == end_y:
+                    break
+            if newMap[x + 1][y] == 0:
+                index += 1
+                self.searchPath.append([x + 1, y, index, p])
+                newMap[x + 1][y] = 1
+                if x + 1 == end_x and y == end_y:
+                    break
+            if newMap[x][y - 1] == 0:
+                index += 1
+                self.searchPath.append([x, y - 1, index, p])
+                newMap[x][y - 1] = 1
+                if x == end_x and y - 1 == end_y:
+                    break
+            p += 1  # 继续遍历下一个坐标
+        index -= 1  # 此时已经找到目标点
+        path = list()  # 用于保存真正的路径
+
+        node = self.searchPath[index]  # 反向去寻找父坐标，直到找到初始坐标
+        while node[3] != -1:
+            path.append([node[0], node[1]])
+            node = self.searchPath[node[3]]
+        path.append([node[0], node[1]])  # 初始坐标也加进来
+        path.reverse()  # 反转list，正向输出
+        print(path)
+        print("路径长度：", len(path), "到达点：", path[len(path) - 1])
+        convertPath = self.convert2OrientPath(deepcopy(path))
+        return path, convertPath  # , convertPath
+
+    def convert2OrientPath(self, path):
+        orientationList = list()
+        result = -1
+        i = 0
+        n = len(path)
+        while i + 1 < n:
+            runX = path[i + 1][0] - path[i][0]
+            runY = path[i + 1][1] - path[i][1]
+            if runX == 1 and runY == 0:
+                result = DOWN
+            if runX == 0 and runY == 1:
+                result = RIGHT
+            if runX == -1 and runY == 0:
+                result = UP
+            if runX == 0 and runY == -1:
+                result = LEFT
+            self.orientPath.append(result)
+            i = i + 1
+        print("路径方向：", self.orientPath)
+        path.reverse()
+        locationList = path
+        destination = locationList[0]
+        self.orientPath.reverse()
+        reversedOrientPath = self.orientPath
+        nowLocation = locationList.pop()
+        nowOrientation = reversedOrientPath.pop()
+        nextLocation = locationList.pop()
+        nextOrientation = reversedOrientPath.pop()
+        while nextLocation != destination:
+            if nextOrientation - nowOrientation == 1 or nextOrientation - nowOrientation == -3:
+                orientationList.append(TURN_RIGHT)
+                nowOrientation = nextOrientation
+                if len(reversedOrientPath) != 0:
+                    nextOrientation = reversedOrientPath.pop()
+                nowLocation = nextLocation
+                nextLocation = locationList.pop()
+                continue
+            if nextOrientation - nowOrientation == -1 or nextOrientation - nowOrientation == 3:
+                orientationList.append(TURN_LEFT)
+                nowOrientation = nextOrientation
+                if len(reversedOrientPath) != 0:
+                    nextOrientation = reversedOrientPath.pop()
+                nowLocation = nextLocation
+                nextLocation = locationList.pop()
+                continue
+            if nextOrientation - nowOrientation == 0 and self.Intersection_coordinates.count(nextLocation) == 1:
+                orientationList.append(GO_STRAIGHT)
+            nowOrientation = nextOrientation
+            if len(reversedOrientPath) != 0:
+                nextOrientation = reversedOrientPath.pop()
+            nowLocation = nextLocation
+            nextLocation = locationList.pop()
+
+        print("旋转方向：", orientationList)
+        print("--------------------")
+
+
+        return orientationList
+
+
+
+FindTreasureXY：
+#这段代码的主要目的是检测视频流中特定形状和颜色的物体（矩形框），并使用绿色的矩形框标记它们。
+# 检测的物体似乎是近似正方形，并且满足一定的尺寸要求。同时，通过NMS确保不会多次标记相同的物体。
+# 此代码应该在捕获到的视频中显示带有绿色矩形框的检测到的物体。
+#findTreasureXY0函数：包含一个无限循环，用于处理来自摄像头的视频流。
+#从摄像头捕获一帧图像。
+#将帧转换为灰度图像。
+#对灰度图像进行Canny边缘检测，以便找到图像中的边缘。
+#提取图像中的轮廓。
+#清空cornerLocationPoint，该列表用于存储检测到的角点位置。
+#遍历每个轮廓：
+#计算轮廓的最小外接矩形（使用cv2.minAreaRect），获取其中心坐标、宽度和高度。
+#检查矩形的宽度和高度是否在一定范围内，如果不符合条件，则跳过该矩形。
+#检查矩形的宽度和高度是否接近正方形（差异小于5），如果是正方形，则标记该矩形。
+#使用非极大值抑制（NMS）来确保不会重复标记相近的矩形。如果矩形与已标记的矩形距离太近，则不标记它。
+#根据上述条件，绘制符合要求的矩形框。
+#更新cornerLocationPoint以存储已标记的矩形的位置信息。
+#最后，在每帧上显示图像，并等待2毫秒以便可以显示视频流。
+
+
+
+import cv2
+import numpy as np
+import os
+
+cornerLocationPoint = list()
+treasureXY = list()
+blueLowHSV = np.array([90, 100, 100])
+blueHighHSV = np.array([124, 255, 255])
+# red1
+redLowHSV1 = np.array([160, 43, 60])
+redHighHSV1 = np.array([180, 255, 255])
+# red2
+redLowHSV2 = np.array([0, 43, 60])
+redHighHSV2 = np.array([5, 255, 255])
+cap = cv2.VideoCapture(0)
+
+
+def findTreasureXY0():
+    while cap.isOpened():
+        # 逐帧读取视频
+        ret, frame = cap.read()
+
+        if ret:
+            # 在这里对每一帧进行处理
+            # 将图像转换为灰度图像
+            gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+
+            # 进行边缘检测
+            edges = cv2.Canny(gray, 200, 300)
+
+            # 轮廓提取
+            contours, _ = cv2.findContours(edges, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+            cornerLocationPoint.clear()
+            # 遍历轮廓
+            for contour in contours:
+                # 计算轮廓的边界框
+                center, WH, _ = cv2.minAreaRect(contour)  # 找最小外接矩形
+                w = WH[0]
+                h = WH[1]
+                if w > 40 or h > 40 or w < 20 or h < 20:   # 过大过小直接过滤
+                    continue
+
+                # 判断边界框是否接近正方形
+                if abs(w - h) < 5:
+                    # 绘制边界框
+                    x = center[0]
+                    y = center[1]
+
+                    # NMS
+                    tag = 1
+                    for point in cornerLocationPoint:
+                        x1 = point[0]
+                        y1 = point[1]
+                        r = pow(pow(x1 - x, 2) + pow(y1 - y, 2), 0.5)
+                        if r < 20:
+                            tag = 0
+                            break
+                    if tag:
+                        cv2.rectangle(frame, (int(x - w / 2), int(y - h / 2)), (int(x + w / 2), int(y + h / 2)),
+                                      (0, 255, 0), 2)
+                        cornerLocationPoint.append([x, y, w, h])
+
+            # 显示帧
+            cv2.imshow('Camera', frame)
+            cv2.waitKey(2)
+
+            if len(cornerLocationPoint) == 4:
+                # 排序
+                cornerLocationPoint.sort(key=lambda member: member[0], reverse=False)
+                cache = list()
+                if cornerLocationPoint[0][1] < cornerLocationPoint[1][1]:
+                    leftTop = cornerLocationPoint.pop(0)
+                    leftBottom = cornerLocationPoint.pop(0)
+                    cache.append(leftTop)
+                else:
+                    leftTop = cornerLocationPoint.pop(1)
+                    leftBottom = cornerLocationPoint.pop(0)
+                    cache.append(leftTop)
+                cornerLocationPoint.sort(key=lambda member: member[1], reverse=False)
+                rightTop = cornerLocationPoint.pop(0)
+                rightBottom = cornerLocationPoint.pop(0)
+                cache.append(rightTop)
+                cache.append(leftBottom)
+                cache.append(rightBottom)
+
+                # 左上  右上  左下  右下
+                X = [cache[0][0], cache[1][0], cache[2][0], cache[3][0]]
+                Y = [cache[0][1], cache[1][1], cache[2][1], cache[3][1]]
+
+                # 透视变换
+                pic1 = np.float32([[X[0], Y[0]], [X[1], Y[1]], [X[2], Y[2]], [X[3], Y[3]]])
+                pic2 = np.float32([[0, 0], [540, 0], [0, 540], [540, 540]])
+                Matrix = cv2.getPerspectiveTransform(pic1, pic2)
+                perspectivePic = cv2.warpPerspective(frame, Matrix, (540, 540))
+                # cv2.imshow("PerspectiveTransform", perspectivePic)
+
+                # 抵消平均误差
+                width = (cache[0][2] + cache[1][2] + cache[2][2] + cache[3][2]) / 4
+                height = (cache[0][3] + cache[1][3] + cache[2][3] + cache[3][3]) / 4
+                # 截取迷宫区域
+                cropped_image = perspectivePic[int(height * 2):int(540 - height * 2),
+                                int(width * 2):int(540 - width * 2)]
+
+                # 将彩色图像转换为灰度图像
+                perspectiveGRAYPic = cv2.cvtColor(cropped_image, cv2.COLOR_BGR2GRAY)
+                # 应用阈值处理，将灰度图像二值化为黑白图像
+                _, binary_image = cv2.threshold(perspectiveGRAYPic, 100, 255, cv2.THRESH_BINARY)  # 光照调整
+                cv2.imshow("THRESH_BINARY", binary_image)
+
+                contours, hierarchy = cv2.findContours(binary_image, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
+
+                treasureXY.clear()
+
+                # 获取图像的宽度和高度
+                w, h = perspectiveGRAYPic.shape
+                # 计算每个小块的宽度和高度
+                unitW = int(w/ 10)
+                unitH = int(h/ 10)
+                perspectiveRGBPic = cv2.cvtColor(perspectiveGRAYPic, cv2.COLOR_GRAY2RGB)
+                # 使用嵌套循环来遍历图像，并划分为100个小块
+                for i in range(0, h, unitH):
+                    for j in range(0, w, unitW):
+                        # 提取当前块的左上角和右下角坐标
+                        x1, y1 = j, i
+                        x2, y2 = j + unitW, i + unitH
+                        # 在图像上绘制矩形框
+                        cv2.rectangle(perspectiveRGBPic, (x1, y1), (x2, y2), (0, 255, 0), 2)  # 这里使用绿色框
+
+                countXY = 0
+
+                for contour in contours:
+                    (x, y), radius = cv2.minEnclosingCircle(contour)
+                    if 8 < radius < 15:
+                        center = (int(x), int(y))
+                        radius = int(radius)
+                        cv2.circle(perspectiveRGBPic, center, radius, (0, 0, 255), 2)
+                        countXY = countXY + 1
+                        x = int(x / unitW) * 2 + 1
+                        y = int(y / unitH) * 2 + 1
+                        treasureXY.append([int(y), int(x)])
+                cv2.imshow('DONE', perspectiveRGBPic)
+                if countXY == 8:
+                    TC = 0
+                    teamImage = perspectivePic[300:550, 0:100]
+                    hsv = cv2.cvtColor(teamImage, cv2.COLOR_BGR2HSV)
+
+                    picRedHSV = cv2.inRange(hsv, lowerb=redLowHSV1, upperb=redHighHSV1) + cv2.inRange(hsv,
+                                                                                                      lowerb=redLowHSV2,
+                                                                                                      upperb=redHighHSV2)
+                    # 进行边缘检测
+                    edgesRed = cv2.Canny(picRedHSV, 200, 300)
+                    # 轮廓提取
+                    contoursRed, _ = cv2.findContours(edgesRed, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+                    # 外层大色块
+                    for contour in contoursRed:
+                        # 找最小外接矩形
+                        _, WH, _ = cv2.minAreaRect(contour)
+                        w = WH[0]
+                        h = WH[1]
+                        if h > 20:  # 过小直接过滤
+                            TC = 1
+
+                    picBlueHSV = cv2.inRange(hsv, lowerb=blueLowHSV, upperb=blueHighHSV)
+                    # 进行边缘检测
+                    edgesBlue = cv2.Canny(picBlueHSV, 200, 300)
+                    # 轮廓提取
+                    contoursBlue, _ = cv2.findContours(edgesBlue, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+                    # 外层大色块
+                    for contour in contoursBlue:
+                        # 找最小外接矩形
+                        _, WH, _ = cv2.minAreaRect(contour)
+                        w = WH[0]
+                        h = WH[1]
+                        if h > 20:  # 过小直接过滤
+                            TC = 2
+
+                    cv2.imshow('teamImage', teamImage)
+                    if TC == 0:
+                        print("队伍颜色识别失败")
+                    if TC == 1:
+                        print("队伍颜色为：红")
+                    if TC == 2:
+                        print("队伍颜色为：蓝")
+
+                    print("识别出的宝藏个数：", len(treasureXY))
+                    print("识别出的宝藏坐标：", treasureXY)
+                    key = cv2.waitKey(0)
+                    # 按下 'Q' 键重新识别
+                    if key == ord('Q') or key == ord('q'):
+                        # 释放资源
+                        cv2.destroyAllWindows()
+                        continue
+                    # 释放资源
+                    cap.release()
+                    cv2.destroyAllWindows()
+                    return treasureXY,TC
+
+
+
+        else:
+            print("摄像头ret有问题")
+            break
+
+def findTreasureXY():
+    if os.path.exists('treasure_data.npy'):
+        # 如果文件存在，则直接加载数据并打印坐标
+        treasure_data = np.load('treasure_data.npy', allow_pickle=True).item()
+        treasureXY = treasure_data['treasure_list']
+        teamColor = treasure_data['team_color']
+        print(treasureXY)
+        print(teamColor)
+        cap.release()
+        cv2.destroyAllWindows()
+        return treasureXY,teamColor
+
+
+    else:
+        # 如果文件不存在，则进行拍照识别等操作
+        treasureXY = []
+        teamColor = 0
+        # findTreasureXY()
+
+        FfindTreasureXY= findTreasureXY0()
+        treasure_list = FfindTreasureXY[0]
+        teamColor = FfindTreasureXY[1]
+
+        # 根据识别结果生成坐标数据
+        # treasure_list = ...
+        # teamColor = ...
+        # 保存数据到文件
+        treasure_data = {
+            'treasure_list': treasure_list,
+            'team_color': teamColor
+        }
+        np.save('treasure_data.npy', treasure_data)
+        #print(treasure_list)
+        #print(teamColor)
+        return treasure_list,teamColor
+
+#FfindTreasureXY = findTreasureXY()
+#treasure_list = FfindTreasureXY[0]
+#teamColor  = FfindTreasureXY[1]
+#print("QwQ")
+#print(treasure_list)
+#print(teamColor)
+
+findTreasureXY()
+
+JudgeTreasure：
+#这段代码是一个基于 OpenCV 的图像处理和边缘检测程序，在实时视频流中检测特定颜色的物体，并对其进行边缘检测。
+#定义了五个颜色的HSV范围。HSV（色相、饱和度、亮度）是一种颜色表示方式。每种颜色都有一个低阈值和高阈值的HSV范围。
+# 这些颜色包括红色、绿色、蓝色和黄色。这些范围将用于在视频流中检测特定颜色的物体。
+#定义常量：
+#BLUE_YELLOW、BLUE_GREEN、RED_GREEN 和 RED_YELLOW 是用于标记不同的颜色情况的常量。
+#定义 judgeTreasure 函数：
+#这个函数是整个程序的主要逻辑部分。
+#cap 是用于从摄像头捕获视频的对象。
+#while 循环在视频流处于打开状态时运行。
+#在循环中，程序读取视频流的帧。
+#每帧都会转换为HSV颜色空间，然后使用定义的颜色范围来创建掩码图像，以突出特定颜色的物体。
+#然后，程序对突出显示的颜色进行边缘检测，找到这些物体的轮廓。
+#接下来，程序会处理检测到的轮廓，找到最小外接矩形。
+
+import cv2
+import numpy as np
+import time
+
+# red1
+redLowHSV1 = np.array([156, 45, 45])
+redHighHSV1 = np.array([180, 255, 255])
+# red2
+redLowHSV2 = np.array([0, 45, 45])
+redHighHSV2 = np.array([12, 255, 255])
+# green
+greenLowHSV = np.array([40 ,60, 30])
+greenHighHSV = np.array([85, 255, 255])
+# blue
+# blueLowHSV = np.array([100, 220, 40])
+blueLowHSV = np.array([90, 95, 75])
+blueHighHSV = np.array([155, 255, 255])
+# yellow
+yellowLowHSV = np.array([20, 30, 50])
+yellowHighHSV = np.array([34, 255, 255])
+
+BLUE_YELLOW = 2  # 蓝色真
+BLUE_GREEN = 4  # 蓝色假
+RED_GREEN = 1  # 红色真
+RED_YELLOW = 3  # 红色假
+
+
+
+def judgeTreasure():
+    print("WOW")
+    start_time = time.time()
+    judge_treasure_return = False
+    cap = cv2.VideoCapture(0)
+    #cap.release()
+    tag = 0
+    while cap.isOpened():
+        # 逐帧读取视频
+        ret, frame = cap.read()
+        if ret:
+            hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
+            # 对图片加上hsv # mask是只突出指定颜色的图片
+            picBlueHSV = cv2.inRange(hsv, lowerb=blueLowHSV, upperb=blueHighHSV)
+            picRedHSV = cv2.inRange(hsv, lowerb=redLowHSV1, upperb=redHighHSV1) + cv2.inRange(hsv, lowerb=redLowHSV2,
+                                                                                              upperb=redHighHSV2)
+            picYellowHSV = cv2.inRange(hsv, lowerb=yellowLowHSV, upperb=yellowHighHSV)
+            picGreenHSV = cv2.inRange(hsv, lowerb=greenLowHSV, upperb=greenHighHSV)
+
+            #cv2.imshow("picBlueHSV", picBlueHSV)
+            #cv2.imshow("picRedHSV", picRedHSV)
+            #cv2.imshow("picYellowHSV", picYellowHSV)
+            #cv2.imshow("picGreenHSV", picGreenHSV)
+
+            # 进行边缘检测
+            edges = cv2.Canny(picBlueHSV, 200, 300)
+            # 轮廓提取
+            contours, _ = cv2.findContours(edges, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+            # 外层大色块
+            for contour in contours:
+                # 找最小外接矩形
+                _, WH, _ = cv2.minAreaRect(contour)
+                w = WH[0]
+                h = WH[1]
+                if h > 40:  # 过小直接过滤
+                    # 定义腐蚀操作的结构元素
+                    kernel = np.ones((3, 3), np.uint8)
+
+                    # 进行腐蚀操作
+                    eroded_image = cv2.erode(picYellowHSV, kernel, iterations=1)
+                    edges = cv2.Canny(picYellowHSV, 200, 300)
+                    contours1, _ = cv2.findContours(edges, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+                    # 内层小色块
+                    for contour1 in contours1:
+                        # 找最小外接矩形
+                        _, WH, _ = cv2.minAreaRect(contour1)
+                        w = WH[0]
+                        if w > 20:  # 过小直接过滤
+                            #cv2.waitKey(0)
+                            cv2.destroyAllWindows()
+                            now_time = time.time()
+                            return BLUE_YELLOW
+                    edges = cv2.Canny(picGreenHSV, 200, 300)
+                    contours2, _ = cv2.findContours(edges, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+                    for contour2 in contours2:
+                        # 找最小外接矩形
+                        center, WH, _ = cv2.minAreaRect(contour2)
+                        w = WH[0]
+                        if w > 20:  # 过小直接过滤
+                            #cv2.waitKey(0)
+                            cv2.destroyAllWindows()
+                            now_time = time.time()
+                            return BLUE_GREEN
+            # 进行边缘检测
+            edges = cv2.Canny(picRedHSV, 200, 300)
+            # 轮廓提取
+            contours3, _ = cv2.findContours(edges, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+            # 外层大色块
+            for contour3 in contours3:
+                # 找最小外接矩形
+                _, WH, _ = cv2.minAreaRect(contour3)
+                w = WH[0]
+                h = WH[1]
+                if h > 40:  # 过小直接过滤
+                    edges = cv2.Canny(picGreenHSV, 200, 300)
+                    contours5, _ = cv2.findContours(edges, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+                    for contour5 in contours5:
+                        # 找最小外接矩形
+                        _, WH, _ = cv2.minAreaRect(contour5)
+                        w = WH[0]
+                        if w > 20:  # 过小直接过滤
+                            #cv2.waitKey(0)
+                            cv2.destroyAllWindows()
+                            now_time = time.time()
+                            return RED_GREEN
+                    edges = cv2.Canny(picYellowHSV, 200, 300)
+                    contours4, _ = cv2.findContours(edges, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+                    # 内层小色块
+                    for contour4 in contours4:
+                        # 找最小外接矩形
+                        _, WH, _ = cv2.minAreaRect(contour4)
+                        w = WH[0]
+                        if w > 20:  # 过小直接过滤
+                            #cv2.waitKey(0)
+                            cv2.destroyAllWindows()
+                            now_time = time.time()
+                            return RED_YELLOW
+
+
+
+            if judgeTreasure is not None:
+                judge_treasure_return = True
+                now_time = time.time()
+
+        if now_time - start_time > 4:
+            break
+    cap.release()  # 释放摄像头资源
+    cv2.destroyAllWindows()
+
+
+#i = judgeTreasure()
+#print(i)
+
+        #if judgeTreasure is not None:
+         #   Judge_Treasure_Return = True
+        #else:
+         #   Judge_Treasure_Return = False
+          #  while Judge_Treasure_Return == True:
+           #     # time.sleep(10)
+            #    cap.release()  # 释放摄像头资源
+             #   cv2.destroyAllWindows()
+
+
+
+MazeMap：
+MAP = [[1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],  # 0
+       [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 1],  # 1
+       [1, 0, 1, 0, 1, 1, 1, 0, 1, 0, 1, 0, 1, 1, 1, 0, 1, 0, 1, 1, 1],  # 2
+       [1, 0, 1, 0, 1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1, 0, 1, 0, 0, 0, 1],  # 3
+       [1, 0, 1, 1, 1, 0, 1, 1, 1, 0, 1, 1, 1, 0, 1, 0, 1, 1, 1, 0, 1],  # 4
+       [1, 0, 1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1, 0, 1, 0, 0, 0, 1],  # 5
+       [1, 1, 1, 0, 1, 0, 1, 0, 1, 1, 1, 1, 1, 0, 1, 1, 1, 0, 1, 1, 1],  # 6
+       [1, 0, 0, 0, 1, 0, 1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1, 0, 1],  # 7
+       [1, 0, 1, 1, 1, 0, 1, 0, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 0, 1],  # 8
+       [1, 0, 1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],  # 9
+       [1, 0, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 0, 1],  # 10         X
+       [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1],  # 11
+       [1, 0, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 0, 1, 0, 1, 1, 1, 0, 1],  # 12
+       [1, 0, 1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1, 0, 1, 0, 0, 0, 1],  # 13
+       [1, 1, 1, 0, 1, 1, 1, 0, 1, 1, 1, 1, 1, 0, 1, 0, 1, 0, 1, 1, 1],  # 14
+       [1, 0, 0, 0, 1, 0, 1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1, 0, 1],  # 15
+       [1, 0, 1, 1, 1, 0, 1, 0, 1, 1, 1, 0, 1, 1, 1, 0, 1, 1, 1, 0, 1],  # 16
+       [1, 0, 0, 0, 1, 0, 1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1, 0, 1],  # 17
+       [1, 1, 1, 0, 1, 0, 1, 1, 1, 0, 1, 0, 1, 0, 1, 1, 1, 0, 1, 0, 1],  # 18
+       [1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],  # 19
+       [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]]  # 20
+     #  0  1  2  3  4  5  6  7  8  9  10 11 12 13 14 15 16 17 18 19 20
+     #                            Y
+
+MoveControl：
+#* coding:UTF8 *
+#######################################################################
+#这段代码用于进行小车的运动控制通过树莓派发送指令 然后通过串口传输给下位机通过单片机控制电机进行前后左右旋转 。
+import RPi.GPIO as GPIO
+import serial
+import time
+import Distance
+from JudgeTreasure import RED_GREEN, BLUE_YELLOW, BLUE_GREEN, RED_YELLOW
+#
+
+#
+BLUE_YELLOW = 2  # 蓝色真
+BLUE_GREEN = 4  # 蓝色假
+RED_GREEN = 1  # 红色真
+RED_YELLOW = 3  # 红色假
+
+
+
+serial_port = '/dev/ttyACM0'
+
+# 打开串口连接
+ser = serial.Serial(serial_port, 115200)  # 根据需要设置波特率
+
+
+
+Tracking_1 = 11
+Tracking_2 = 13
+Tracking_3 = 15
+Tracking_4 = 29
+Tracking_5 = 31
+Tracking_6 = 33
+Tracking_7 = 35
+Tracking_8 = 37
+
+
+#
+GPIO.setmode(GPIO.BOARD)
+GPIO.setwarnings(False)
+
+
+#
+GPIO.setup(Tracking_1, GPIO.IN)
+GPIO.setup(Tracking_2, GPIO.IN)
+GPIO.setup(Tracking_3, GPIO.IN)
+GPIO.setup(Tracking_4, GPIO.IN)
+GPIO.setup(Tracking_5, GPIO.IN)
+GPIO.setup(Tracking_6, GPIO.IN)
+GPIO.setup(Tracking_7, GPIO.IN)
+GPIO.setup(Tracking_8, GPIO.IN)
+#
+turnList = list()
+accomplishTag = 1
+#
+
+
+def runn(binary_code):
+  ser = serial.Serial(serial_port, 115200)
+  ser.write(binary_code)
+  ser.close()
+
+def run():
+    ser = serial.Serial(serial_port, 115200)
+    #binary_code_run = b'\x7B\x00\x00\x0F\x00\x00\x00\x00\x00\x74\x7D'
+    binary_code_run = b'\x7B\x00\x00\x02\x60\x00\x00\x00\x00\x19\x7D'
+    ser.write(binary_code_run)
+    ser.close()
+    return
+
+def back():
+    ser = serial.Serial(serial_port, 115200)
+    binary_code_back = b'\x7B\x00\x00\xFF\xB0\x00\x00\x00\x00\x34\x7D'
+    ser.write(binary_code_back)
+    ser.close()
+    return
+
+def stop():
+    ser = serial.Serial(serial_port, 115200)
+    binary_code_stop = b'\x7B\x00\x00\x00\x00\x00\x00\x00\x00\x7B\x7D'
+    ser.write(binary_code_stop)
+    ser.close()
+    return
+
+def left():
+    ser = serial.Serial(serial_port, 115200)
+    binary_code_left = b'\x7B\x00\x00\x00\x00\x00\x00\x05\x00\x7E\x7D'
+    #binary_code_left = b'\x7B\x00\x00\x00\x00\x00\x00\x08\x00\x73\x7D'
+    #runn(b'\x7B\x00\x00\x00\x00\x00\x00\x03\x00\x78\x7D')
+    #time.sleep(1.15)
+    ser.write(binary_code_left)
+    ser.close()
+    return
+
+def right():
+    ser = serial.Serial(serial_port, 115200)
+    #binary_code_right = b'\x7B\x00\x00\x00\x00\x00\x00\xF6\x00\x8D\x7D'
+    binary_code_right = b'\x7B\x00\x00\x00\x00\x00\x00\xFB\x00\x80\x7D'
+    ser.write(binary_code_right)
+    ser.close()
+    return
+
+#
+def distanceMove():
+    distance = Distance.Distance()
+    while distance > 20:
+        tracking_function()
+        distance = Distance.Distance()
+    stop()
+    #time.sleep(0.5)
+    return
+
+ #遇到不是直行的路径，就来寻找方向指令，遇到转弯就回来查询转向，并按既定方向指令运动。
+def move(orientList):
+     #处理坐标，转化为控制
+    global turnList, accomplishTag
+    orientList.reverse()
+    turnList = orientList
+    stop()
+    while accomplishTag:
+        tracking_function()
+    accomplishTag = 1
+    distanceMove()
+#
+#
+def goStraight():
+    #电机驱动代码
+    run()
+    time.sleep(0.2)
+    if len(turnList) == 0:
+        global accomplishTag
+        accomplishTag = 0
+        beginTime = time.time()
+        nowTime = time.time()
+        #最后一个弯道后直行多久
+        while nowTime - beginTime < 0.1:
+            tracking_function()
+            nowTime = time.time()
+#
+#
+def turnRight():
+    #电机驱动代码
+    run()
+    time.sleep(0.14)
+    right()
+    time.sleep(0.3)
+    while 1:
+        right()
+        time.sleep(0.02)
+        Tracking_1Value = GPIO.input(Tracking_1)
+        Tracking_2Value = GPIO.input(Tracking_2)
+        Tracking_3Value = GPIO.input(Tracking_3)
+        Tracking_4Value = GPIO.input(Tracking_4)
+        Tracking_5Value = GPIO.input(Tracking_5)
+        Tracking_6Value = GPIO.input(Tracking_6)
+        Tracking_7Value = GPIO.input(Tracking_7)
+        Tracking_8Value = GPIO.input(Tracking_8)
+        #print(Tracking_Left1Value, Tracking_Left2Value, Tracking_Right1Value, Tracking_Right2Value)
+        if Tracking_4Value == 0 or Tracking_5Value == 0 :
+            stop()
+            #time.sleep(0.2)
+            break
+    if len(turnList) == 0:
+        global accomplishTag
+        accomplishTag = 0
+        beginTime = time.time()
+        nowTime = time.time()
+        #最后一个弯道后直行多久
+        while nowTime - beginTime < 0.3:
+            tracking_function()
+            nowTime = time.time()
+        #runn(b'\x7B\x00\x00\x02\x00\x00\x00\xFF\x00\x86\x7D')
+        #time.sleep(1.5)
+#
+#
+def turnLeft():
+    #电机驱动代码
+    run()
+    time.sleep(0.14)
+    left()
+    time.sleep(0.3)
+    while 1:
+        left()
+        time.sleep(0.02)
+        Tracking_1Value = GPIO.input(Tracking_1)
+        Tracking_2Value = GPIO.input(Tracking_2)
+        Tracking_3Value = GPIO.input(Tracking_3)
+        Tracking_4Value = GPIO.input(Tracking_4)
+        Tracking_5Value = GPIO.input(Tracking_5)
+        Tracking_6Value = GPIO.input(Tracking_6)
+        Tracking_7Value = GPIO.input(Tracking_7)
+        Tracking_8Value = GPIO.input(Tracking_8)
+        #print(Tracking_Left1Value, Tracking_Left2Value, Tracking_Right1Value, Tracking_Right2Value)
+        if Tracking_4Value == 0 or Tracking_5Value == 0:
+            stop()
+            #time.sleep(0.2)
+            break
+    if len(turnList) == 0:
+        global accomplishTag
+        accomplishTag = 0
+        beginTime = time.time()
+        nowTime = time.time()
+        #最后一个弯道后直行多久
+        while nowTime - beginTime < 0.3:
+            tracking_function()
+            nowTime = time.time()
+        #runn(b'\x7B\x00\x00\x02\x00\x00\x00\xFF\x00\x86\x7D')
+        #time.sleep(1.5)
+#
+def turnBack():
+    right()
+    time.sleep(0.8)
+    print("turn back")
+    while 1:
+        right()
+        time.sleep(0.02)
+        Tracking_1Value = GPIO.input(Tracking_1)
+        Tracking_2Value = GPIO.input(Tracking_2)
+        Tracking_3Value = GPIO.input(Tracking_3)
+        Tracking_4Value = GPIO.input(Tracking_4)
+        Tracking_5Value = GPIO.input(Tracking_5)
+        Tracking_6Value = GPIO.input(Tracking_6)
+        Tracking_7Value = GPIO.input(Tracking_7)
+        Tracking_8Value = GPIO.input(Tracking_8)
+        #print(Tracking_Left1Value, Tracking_Left2Value, Tracking_Right1Value, Tracking_Right2Value)
+        if Tracking_4Value == 0 or Tracking_5Value == 0:
+            #left()
+            #time.sleep(0.1)
+            back()
+            time.sleep(0.7)
+            stop()
+            break
+#
+#
+#def turnBack():
+#    left()
+#    time.sleep(1.35)
+#    back()
+#    time.sleep(0.8)
+
+
+
+def where2Go():
+    orient = turnList.pop()
+    print("pop orient:", orient)
+    if orient == 1:
+        turnRight()
+    if orient == 3:
+        turnLeft()
+    if orient == 0:
+        goStraight()
+#
+#
+def tracking_function():
+    #接收输入信号
+    Tracking_1Value = GPIO.input(Tracking_1)
+    Tracking_2Value = GPIO.input(Tracking_2)
+    Tracking_3Value = GPIO.input(Tracking_3)
+    Tracking_4Value = GPIO.input(Tracking_4)
+    Tracking_5Value = GPIO.input(Tracking_5)
+    Tracking_6Value = GPIO.input(Tracking_6)
+    Tracking_7Value = GPIO.input(Tracking_7)
+    Tracking_8Value = GPIO.input(Tracking_8)
+#
+    #print(Tracking_Left1Value, Tracking_Left2Value, Tracking_Right1Value, Tracking_Right2Value)
+    #四路循迹引脚电平状态
+    #1 0 0 0
+    #1 1 0 0
+    #处理右直角的转动
+#1111 0000 and 1110 0000 and 1100 0000
+    if (Tracking_1Value == 1 and Tracking_2Value == 1 and Tracking_3Value == 1 and Tracking_4Value == 1 and Tracking_5Value == 1 and Tracking_6Value == 0 and Tracking_7Value == 0 and Tracking_8Value == 0) or (Tracking_1Value == 1 and Tracking_2Value == 1 and Tracking_3Value == 1 and Tracking_4Value == 1 and Tracking_5Value == 0 and Tracking_6Value == 0 and Tracking_7Value == 0 and Tracking_8Value == 0)or(Tracking_1Value == 1 and Tracking_2Value == 1 and Tracking_3Value == 0 and Tracking_4Value == 0 and Tracking_5Value == 0 and Tracking_6Value == 0 and Tracking_7Value == 0 and Tracking_8Value == 0)or(Tracking_1Value == 1 and Tracking_2Value == 1 and Tracking_3Value == 1 and Tracking_4Value == 0 and Tracking_5Value == 0 and Tracking_6Value == 0 and Tracking_7Value == 0 and Tracking_8Value == 0):
+        print(Tracking_1Value,Tracking_2Value,Tracking_3Value,Tracking_4Value,Tracking_5Value,Tracking_6Value,Tracking_7Value,Tracking_8Value)
+        where2Go()
+#
+    #四路循迹引脚电平状态
+    #0 0 0 1
+    #0 0 1 1
+    #处理左直角的转动
+    elif (Tracking_1Value == 0 and Tracking_2Value == 0 and Tracking_3Value == 0 and Tracking_4Value == 1 and Tracking_5Value == 1 and Tracking_6Value == 1 and Tracking_7Value == 1 and Tracking_8Value == 1) or (Tracking_1Value == 0 and Tracking_2Value == 0 and Tracking_3Value == 0 and Tracking_4Value == 0 and Tracking_5Value == 1 and Tracking_6Value == 1 and Tracking_7Value == 1 and Tracking_8Value == 1)or(Tracking_1Value == 0 and Tracking_2Value == 0 and Tracking_3Value == 0 and Tracking_4Value == 0 and Tracking_5Value == 0 and Tracking_6Value == 1 and Tracking_7Value == 1 and Tracking_8Value == 1)or(Tracking_1Value == 0 and Tracking_2Value == 0 and Tracking_3Value == 0 and Tracking_4Value == 0 and Tracking_5Value == 0 and Tracking_6Value == 0 and Tracking_7Value == 1 and Tracking_8Value == 1):
+        print(Tracking_1Value,Tracking_2Value,Tracking_3Value,Tracking_4Value,Tracking_5Value,Tracking_6Value,Tracking_7Value,Tracking_8Value)
+        where2Go()
+#
+    #四路循迹引脚电平状态
+    #0 0 0 0
+    #处理丁字口的转动
+    elif (Tracking_1Value == 0 and Tracking_2Value == 0 and Tracking_3Value == 0 and Tracking_4Value == 0 and Tracking_5Value == 0 and Tracking_6Value == 0 and Tracking_7Value == 0 and Tracking_8Value == 0):
+        where2Go()
+    elif (Tracking_1Value == 1 and Tracking_2Value == 0 and Tracking_3Value == 0 and Tracking_4Value == 0 and Tracking_5Value == 0 and Tracking_6Value == 0 and Tracking_7Value == 0 and Tracking_8Value == 0):
+        where2Go()
+    elif (Tracking_1Value == 0 and Tracking_2Value == 0 and Tracking_3Value == 0 and Tracking_4Value == 0 and Tracking_5Value == 0 and Tracking_6Value == 0 and Tracking_7Value == 0 and Tracking_8Value == 1):
+        where2Go()
+#
+    #四路循迹引脚电平状态
+    #1 0 1 1
+    #0 1 1 1
+    #处理左小弯
+#1110 1111
+    elif Tracking_1Value == 1 and Tracking_2Value == 1 and Tracking_3Value == 1 and Tracking_4Value == 0 and Tracking_5Value == 1 and Tracking_6Value == 1 and Tracking_7Value == 1 and Tracking_8Value == 1:
+        print(Tracking_1Value,Tracking_2Value,Tracking_3Value,Tracking_4Value,Tracking_5Value,Tracking_6Value,Tracking_7Value,Tracking_8Value)
+        runn(b'\x7B\x00\x00\x02\x00\x00\x00\x01\x00\x78\x7D')
+        time.sleep(0.01)
+
+#1101 1111
+    elif Tracking_1Value == 1 and Tracking_2Value == 1 and Tracking_3Value == 0 and Tracking_4Value == 1 and Tracking_5Value == 1 and Tracking_6Value == 1 and Tracking_7Value == 1 and Tracking_8Value == 1:
+        print(Tracking_1Value,Tracking_2Value,Tracking_3Value,Tracking_4Value,Tracking_5Value,Tracking_6Value,Tracking_7Value,Tracking_8Value)
+        runn(b'\x7B\x00\x00\x02\x00\x00\x00\x02\x00\x7B\x7D')
+        time.sleep(0.01)
+
+#1011 1111
+    elif Tracking_1Value == 1 and Tracking_2Value == 0 and Tracking_3Value == 1 and Tracking_4Value == 1 and Tracking_5Value == 1 and Tracking_6Value == 1 and Tracking_7Value == 1 and Tracking_8Value == 1:
+        print(Tracking_1Value,Tracking_2Value,Tracking_3Value,Tracking_4Value,Tracking_5Value,Tracking_6Value,Tracking_7Value,Tracking_8Value)
+        runn(b'\x7B\x00\x00\x02\x00\x00\x00\x03\x00\x7A\x7D')
+        time.sleep(0.01)
+
+#1100 1111
+    elif Tracking_1Value == 1 and Tracking_2Value == 1 and Tracking_3Value == 0 and Tracking_4Value == 0 and Tracking_5Value == 1 and Tracking_6Value == 1 and Tracking_7Value == 1 and Tracking_8Value == 1:
+        print(Tracking_1Value,Tracking_2Value,Tracking_3Value,Tracking_4Value,Tracking_5Value,Tracking_6Value,Tracking_7Value,Tracking_8Value)
+        runn(b'\x7B\x00\x00\x02\x00\x00\x00\x02\x00\x7B\x7D')
+        time.sleep(0.01)
+
+#1001 1111
+    elif Tracking_1Value == 1 and Tracking_2Value == 0 and Tracking_3Value == 0 and Tracking_4Value == 1 and Tracking_5Value == 1 and Tracking_6Value == 1 and Tracking_7Value == 1 and Tracking_8Value == 1:
+        print(Tracking_1Value,Tracking_2Value,Tracking_3Value,Tracking_4Value,Tracking_5Value,Tracking_6Value,Tracking_7Value,Tracking_8Value)
+        runn(b'\x7B\x00\x00\x02\x00\x00\x00\x03\x00\x7A\x7D')
+        time.sleep(0.01)
+#0011 1111
+    elif Tracking_1Value == 0 and Tracking_2Value == 0 and Tracking_3Value == 1 and Tracking_4Value == 1 and Tracking_5Value == 1 and Tracking_6Value == 1 and Tracking_7Value == 1 and Tracking_8Value == 1:
+        print(Tracking_1Value,Tracking_2Value,Tracking_3Value,Tracking_4Value,Tracking_5Value,Tracking_6Value,Tracking_7Value,Tracking_8Value)
+        runn(b'\x7B\x00\x00\x02\x00\x00\x00\x04\x00\x7D\x7D')
+        time.sleep(0.01)
+#0111 1111
+    elif Tracking_1Value == 0 and Tracking_2Value == 1 and Tracking_3Value == 1 and Tracking_4Value == 1 and Tracking_5Value == 1 and Tracking_6Value == 1 and Tracking_7Value == 1 and Tracking_8Value == 1:
+        print(Tracking_1Value,Tracking_2Value,Tracking_3Value,Tracking_4Value,Tracking_5Value,Tracking_6Value,Tracking_7Value,Tracking_8Value)
+        runn(b'\x7B\x00\x00\x02\x00\x00\x00\x05\x00\x7C\x7D')
+        time.sleep(0.01)
+#1100 0111
+    elif Tracking_1Value == 1 and Tracking_2Value == 1 and Tracking_3Value == 0 and Tracking_4Value == 0 and Tracking_5Value == 0 and Tracking_6Value == 1 and Tracking_7Value == 1 and Tracking_8Value == 1:
+        print(Tracking_1Value,Tracking_2Value,Tracking_3Value,Tracking_4Value,Tracking_5Value,Tracking_6Value,Tracking_7Value,Tracking_8Value)
+        runn(b'\x7B\x00\x00\x02\x00\x00\x00\x01\x00\x78\x7D')
+        time.sleep(0.01)
+#1000 1111
+    elif Tracking_1Value == 1 and Tracking_2Value == 0 and Tracking_3Value == 0 and Tracking_4Value == 0 and Tracking_5Value == 1 and Tracking_6Value == 1 and Tracking_7Value == 1 and Tracking_8Value == 1:
+        print(Tracking_1Value,Tracking_2Value,Tracking_3Value,Tracking_4Value,Tracking_5Value,Tracking_6Value,Tracking_7Value,Tracking_8Value)
+        runn(b'\x7B\x00\x00\x02\x00\x00\x00\x01\x00\x78\x7D')
+        time.sleep(0.01)
+
+#chuliyouxiaowan
+#1111 0111
+
+    elif Tracking_1Value == 1 and Tracking_2Value == 1 and Tracking_3Value == 1 and Tracking_4Value == 1 and Tracking_5Value == 0 and Tracking_6Value == 1 and Tracking_7Value == 1 and Tracking_8Value == 1:
+        print(Tracking_1Value,Tracking_2Value,Tracking_3Value,Tracking_4Value,Tracking_5Value,Tracking_6Value,Tracking_7Value,Tracking_8Value)
+        runn(b'\x7B\x00\x00\x02\x00\x00\x00\xFF\x00\x86\x7D')
+        time.sleep(0.01)
+
+#1111 1011
+    elif Tracking_1Value == 1 and Tracking_2Value == 1 and Tracking_3Value == 1 and Tracking_4Value == 1 and Tracking_5Value == 1 and Tracking_6Value == 0 and Tracking_7Value == 1 and Tracking_8Value == 1:
+        print(Tracking_1Value,Tracking_2Value,Tracking_3Value,Tracking_4Value,Tracking_5Value,Tracking_6Value,Tracking_7Value,Tracking_8Value)
+        runn(b'\x7B\x00\x00\x02\x00\x00\x00\xFE\x00\x87\x7D')
+        time.sleep(0.01)
+
+#1111 1101
+    elif Tracking_1Value == 1 and Tracking_2Value == 1 and Tracking_3Value == 1 and Tracking_4Value == 1 and Tracking_5Value == 1 and Tracking_6Value == 1 and Tracking_7Value == 0 and Tracking_8Value == 1:
+        print(Tracking_1Value,Tracking_2Value,Tracking_3Value,Tracking_4Value,Tracking_5Value,Tracking_6Value,Tracking_7Value,Tracking_8Value)
+        runn(b'\x7B\x00\x00\x02\x00\x00\x00\xFC\x00\x85\x7D')
+        time.sleep(0.01)
+
+#1111 0011
+    elif Tracking_1Value == 1 and Tracking_2Value == 1 and Tracking_3Value == 1 and Tracking_4Value == 1 and Tracking_5Value == 0 and Tracking_6Value == 0 and Tracking_7Value == 1 and Tracking_8Value == 1:
+        print(Tracking_1Value,Tracking_2Value,Tracking_3Value,Tracking_4Value,Tracking_5Value,Tracking_6Value,Tracking_7Value,Tracking_8Value)
+        runn(b'\x7B\x00\x00\x02\x00\x00\x00\xFE\x00\x87\x7D')
+        time.sleep(0.01)
+
+#1111 1001
+    elif Tracking_1Value == 1 and Tracking_2Value == 1 and Tracking_3Value == 1 and Tracking_4Value == 1 and Tracking_5Value == 1 and Tracking_6Value == 0 and Tracking_7Value == 0 and Tracking_8Value == 1:
+        print(Tracking_1Value,Tracking_2Value,Tracking_3Value,Tracking_4Value,Tracking_5Value,Tracking_6Value,Tracking_7Value,Tracking_8Value)
+        runn(b'\x7B\x00\x00\x02\x00\x00\x00\xFD\x00\x84\x7D')
+        time.sleep(0.01)
+#1111 1100
+    elif Tracking_1Value == 1 and Tracking_2Value == 1 and Tracking_3Value == 1 and Tracking_4Value == 1 and Tracking_5Value == 1 and Tracking_6Value == 1 and Tracking_7Value == 0 and Tracking_8Value == 0:
+        print(Tracking_1Value,Tracking_2Value,Tracking_3Value,Tracking_4Value,Tracking_5Value,Tracking_6Value,Tracking_7Value,Tracking_8Value)
+        runn(b'\x7B\x00\x00\x02\x00\x00\x00\xFC\x00\x85\x7D')
+        time.sleep(0.01)
+#1111 1110
+    elif Tracking_1Value == 1 and Tracking_2Value == 1 and Tracking_3Value == 1 and Tracking_4Value == 1 and Tracking_5Value == 1 and Tracking_6Value == 1 and Tracking_7Value == 1 and Tracking_8Value == 0:
+        print(Tracking_1Value,Tracking_2Value,Tracking_3Value,Tracking_4Value,Tracking_5Value,Tracking_6Value,Tracking_7Value,Tracking_8Value)
+        runn(b'\x7B\x00\x00\x02\x00\x00\x00\xFB\x00\x82\x7D')
+        time.sleep(0.01)
+#1110 0011
+    elif Tracking_1Value == 1 and Tracking_2Value == 1 and Tracking_3Value == 1 and Tracking_4Value == 0 and Tracking_5Value == 0 and Tracking_6Value == 0 and Tracking_7Value == 1 and Tracking_8Value == 1:
+        print(Tracking_1Value,Tracking_2Value,Tracking_3Value,Tracking_4Value,Tracking_5Value,Tracking_6Value,Tracking_7Value,Tracking_8Value)
+        runn(b'\x7B\x00\x00\x02\x00\x00\x00\xFF\x00\x86\x7D')
+        time.sleep(0.01)
+#1111 0001
+    elif Tracking_1Value == 1 and Tracking_2Value == 1 and Tracking_3Value == 1 and Tracking_4Value == 1 and Tracking_5Value == 0 and Tracking_6Value == 0 and Tracking_7Value == 0 and Tracking_8Value == 1:
+        print(Tracking_1Value,Tracking_2Value,Tracking_3Value,Tracking_4Value,Tracking_5Value,Tracking_6Value,Tracking_7Value,Tracking_8Value)
+        runn(b'\x7B\x00\x00\x02\x00\x00\x00\xFF\x00\x86\x7D')
+        time.sleep(0.01)
+
+#
+    #四路循迹引脚电平状态
+    #1 0 0 1
+    #处理直线
+    if Tracking_1Value == 1 and Tracking_2Value == 1 and Tracking_3Value == 1 and Tracking_4Value == 0 and Tracking_5Value == 0 and Tracking_6Value == 1 and Tracking_7Value == 1 and Tracking_8Value == 1:
+        print(Tracking_1Value,Tracking_2Value,Tracking_3Value,Tracking_4Value,Tracking_5Value,Tracking_6Value,Tracking_7Value,Tracking_8Value)
+        run()
+        time.sleep(0.01)
+#
+    #当为1 1 1 1时小车直行
+    elif Tracking_1Value == 1 and Tracking_2Value == 1 and Tracking_3Value == 1 and Tracking_4Value == 0 and Tracking_5Value == 0 and Tracking_6Value == 1 and Tracking_7Value == 1 and Tracking_8Value == 1:
+        print(Tracking_1Value,Tracking_2Value,Tracking_3Value,Tracking_4Value,Tracking_5Value,Tracking_6Value,Tracking_7Value,Tracking_8Value)
+        run()
+        time.sleep(0.01)
+
+#
+
+def tracking_function1():
+    #接收输入信号
+    Tracking_1Value = GPIO.input(Tracking_1)
+    Tracking_2Value = GPIO.input(Tracking_2)
+    Tracking_3Value = GPIO.input(Tracking_3)
+    Tracking_4Value = GPIO.input(Tracking_4)
+    Tracking_5Value = GPIO.input(Tracking_5)
+    Tracking_6Value = GPIO.input(Tracking_6)
+    Tracking_7Value = GPIO.input(Tracking_7)
+    Tracking_8Value = GPIO.input(Tracking_8)
+#
+    #print(Tracking_Left1Value, Tracking_Left2Value, Tracking_Right1Value, Tracking_Right2Value)
+    #四路循迹引脚电平状态
+    #1 0 0 0
+    #1 1 0 0
+    #处理右直角的转动
+#1111 0000 and 1110 0000 and 1100 0000
+    if (Tracking_1Value == 1 and Tracking_2Value == 1 and Tracking_3Value == 1 and Tracking_4Value == 1 and Tracking_5Value == 0 and Tracking_6Value == 0 and Tracking_7Value == 0 and Tracking_8Value == 0)or(Tracking_1Value == 1 and Tracking_2Value == 1 and Tracking_3Value == 0 and Tracking_4Value == 0 and Tracking_5Value == 0 and Tracking_6Value == 0 and Tracking_7Value == 0 and Tracking_8Value == 0)or(Tracking_1Value == 1 and Tracking_2Value == 1 and Tracking_3Value == 1 and Tracking_4Value == 0 and Tracking_5Value == 0 and Tracking_6Value == 0 and Tracking_7Value == 0 and Tracking_8Value == 0):
+        print(Tracking_1Value,Tracking_2Value,Tracking_3Value,Tracking_4Value,Tracking_5Value,Tracking_6Value,Tracking_7Value,Tracking_8Value)
+        where2Go()
+#
+    #四路循迹引脚电平状态
+    #0 0 0 1
+    #0 0 1 1
+    #处理左直角的转动
+    elif (Tracking_1Value == 0 and Tracking_2Value == 0 and Tracking_3Value == 0 and Tracking_4Value == 0 and Tracking_5Value == 1 and Tracking_6Value == 1 and Tracking_7Value == 1 and Tracking_8Value == 1)or(Tracking_1Value == 0 and Tracking_2Value == 0 and Tracking_3Value == 0 and Tracking_4Value == 0 and Tracking_5Value == 0 and Tracking_6Value == 1 and Tracking_7Value == 1 and Tracking_8Value == 1)or(Tracking_1Value == 0 and Tracking_2Value == 0 and Tracking_3Value == 0 and Tracking_4Value == 0 and Tracking_5Value == 0 and Tracking_6Value == 0 and Tracking_7Value == 1 and Tracking_8Value == 1):
+        print(Tracking_1Value,Tracking_2Value,Tracking_3Value,Tracking_4Value,Tracking_5Value,Tracking_6Value,Tracking_7Value,Tracking_8Value)
+        where2Go()
+#
+    #四路循迹引脚电平状态
+    #0 0 0 0
+    #处理丁字口的转动
+    elif (Tracking_1Value == 0 and Tracking_2Value == 0 and Tracking_3Value == 0 and Tracking_4Value == 0 and Tracking_5Value == 0 and Tracking_6Value == 0 and Tracking_7Value == 0 and Tracking_8Value == 0):
+        where2Go()
+    elif (Tracking_1Value == 1 and Tracking_2Value == 0 and Tracking_3Value == 0 and Tracking_4Value == 0 and Tracking_5Value == 0 and Tracking_6Value == 0 and Tracking_7Value == 0 and Tracking_8Value == 0):
+        where2Go()
+    elif (Tracking_1Value == 0 and Tracking_2Value == 0 and Tracking_3Value == 0 and Tracking_4Value == 0 and Tracking_5Value == 0 and Tracking_6Value == 0 and Tracking_7Value == 0 and Tracking_8Value == 1):
+        where2Go()
+#
+    #四路循迹引脚电平状态
+    #1 0 1 1
+    #0 1 1 1
+    #处理左小弯
+#1110 1111
+    elif Tracking_1Value == 1 and Tracking_2Value == 1 and Tracking_3Value == 1 and Tracking_4Value == 0 and Tracking_5Value == 1 and Tracking_6Value == 1 and Tracking_7Value == 1 and Tracking_8Value == 1:
+        print(Tracking_1Value,Tracking_2Value,Tracking_3Value,Tracking_4Value,Tracking_5Value,Tracking_6Value,Tracking_7Value,Tracking_8Value)
+        runn(b'\x7B\x00\x00\x01\x00\x00\x00\x01\x00\x7B\x7D')
+        time.sleep(0.01)
+
+#1101 1111
+    elif Tracking_1Value == 1 and Tracking_2Value == 1 and Tracking_3Value == 0 and Tracking_4Value == 1 and Tracking_5Value == 1 and Tracking_6Value == 1 and Tracking_7Value == 1 and Tracking_8Value == 1:
+        print(Tracking_1Value,Tracking_2Value,Tracking_3Value,Tracking_4Value,Tracking_5Value,Tracking_6Value,Tracking_7Value,Tracking_8Value)
+        runn(b'\x7B\x00\x00\x01\x00\x00\x00\x02\x00\x78\x7D')
+        time.sleep(0.01)
+
+#1011 1111
+    elif Tracking_1Value == 1 and Tracking_2Value == 0 and Tracking_3Value == 1 and Tracking_4Value == 1 and Tracking_5Value == 1 and Tracking_6Value == 1 and Tracking_7Value == 1 and Tracking_8Value == 1:
+        print(Tracking_1Value,Tracking_2Value,Tracking_3Value,Tracking_4Value,Tracking_5Value,Tracking_6Value,Tracking_7Value,Tracking_8Value)
+        runn(b'\x7B\x00\x00\x01\x00\x00\x00\x03\x00\x79\x7D')
+        time.sleep(0.01)
+
+#1100 1111
+    elif Tracking_1Value == 1 and Tracking_2Value == 1 and Tracking_3Value == 0 and Tracking_4Value == 0 and Tracking_5Value == 1 and Tracking_6Value == 1 and Tracking_7Value == 1 and Tracking_8Value == 1:
+        print(Tracking_1Value,Tracking_2Value,Tracking_3Value,Tracking_4Value,Tracking_5Value,Tracking_6Value,Tracking_7Value,Tracking_8Value)
+        runn(b'\x7B\x00\x00\x01\x00\x00\x00\x02\x00\x78\x7D')
+        time.sleep(0.01)
+
+#1001 1111
+    elif Tracking_1Value == 1 and Tracking_2Value == 0 and Tracking_3Value == 0 and Tracking_4Value == 1 and Tracking_5Value == 1 and Tracking_6Value == 1 and Tracking_7Value == 1 and Tracking_8Value == 1:
+        print(Tracking_1Value,Tracking_2Value,Tracking_3Value,Tracking_4Value,Tracking_5Value,Tracking_6Value,Tracking_7Value,Tracking_8Value)
+        runn(b'\x7B\x00\x00\x01\x00\x00\x00\x03\x00\x79\x7D')
+        time.sleep(0.01)
+#0011 1111
+    elif Tracking_1Value == 0 and Tracking_2Value == 0 and Tracking_3Value == 1 and Tracking_4Value == 1 and Tracking_5Value == 1 and Tracking_6Value == 1 and Tracking_7Value == 1 and Tracking_8Value == 1:
+        print(Tracking_1Value,Tracking_2Value,Tracking_3Value,Tracking_4Value,Tracking_5Value,Tracking_6Value,Tracking_7Value,Tracking_8Value)
+        runn(b'\x7B\x00\x00\x01\x00\x00\x00\x04\x00\x7E\x7D')
+        time.sleep(0.01)
+#0111 1111
+    elif Tracking_1Value == 0 and Tracking_2Value == 1 and Tracking_3Value == 1 and Tracking_4Value == 1 and Tracking_5Value == 1 and Tracking_6Value == 1 and Tracking_7Value == 1 and Tracking_8Value == 1:
+        print(Tracking_1Value,Tracking_2Value,Tracking_3Value,Tracking_4Value,Tracking_5Value,Tracking_6Value,Tracking_7Value,Tracking_8Value)
+        runn(b'\x7B\x00\x00\x01\x00\x00\x00\x05\x00\x7F\x7D')
+        time.sleep(0.01)
+#1100 0111
+    elif Tracking_1Value == 1 and Tracking_2Value == 1 and Tracking_3Value == 0 and Tracking_4Value == 0 and Tracking_5Value == 0 and Tracking_6Value == 1 and Tracking_7Value == 1 and Tracking_8Value == 1:
+        print(Tracking_1Value,Tracking_2Value,Tracking_3Value,Tracking_4Value,Tracking_5Value,Tracking_6Value,Tracking_7Value,Tracking_8Value)
+        runn(b'\x7B\x00\x00\x01\x00\x00\x00\x01\x00\x7B\x7D')
+        time.sleep(0.01)
+#1000 1111
+    elif Tracking_1Value == 1 and Tracking_2Value == 0 and Tracking_3Value == 0 and Tracking_4Value == 0 and Tracking_5Value == 1 and Tracking_6Value == 1 and Tracking_7Value == 1 and Tracking_8Value == 1:
+        print(Tracking_1Value,Tracking_2Value,Tracking_3Value,Tracking_4Value,Tracking_5Value,Tracking_6Value,Tracking_7Value,Tracking_8Value)
+        runn(b'\x7B\x00\x00\x01\x00\x00\x00\x01\x00\x7B\x7D')
+        time.sleep(0.01)
+
+#chuliyouxiaowan
+#1111 0111
+
+    elif Tracking_1Value == 1 and Tracking_2Value == 1 and Tracking_3Value == 1 and Tracking_4Value == 1 and Tracking_5Value == 0 and Tracking_6Value == 1 and Tracking_7Value == 1 and Tracking_8Value == 1:
+        print(Tracking_1Value,Tracking_2Value,Tracking_3Value,Tracking_4Value,Tracking_5Value,Tracking_6Value,Tracking_7Value,Tracking_8Value)
+        runn(b'\x7B\x00\x00\x02\x00\x00\x00\xFF\x00\x85\x7D')
+        time.sleep(0.01)
+
+#1111 1011
+    elif Tracking_1Value == 1 and Tracking_2Value == 1 and Tracking_3Value == 1 and Tracking_4Value == 1 and Tracking_5Value == 1 and Tracking_6Value == 0 and Tracking_7Value == 1 and Tracking_8Value == 1:
+        print(Tracking_1Value,Tracking_2Value,Tracking_3Value,Tracking_4Value,Tracking_5Value,Tracking_6Value,Tracking_7Value,Tracking_8Value)
+        runn(b'\x7B\x00\x00\x01\x00\x00\x00\xFE\x00\x84\x7D')
+        time.sleep(0.01)
+
+#1111 1101
+    elif Tracking_1Value == 1 and Tracking_2Value == 1 and Tracking_3Value == 1 and Tracking_4Value == 1 and Tracking_5Value == 1 and Tracking_6Value == 1 and Tracking_7Value == 0 and Tracking_8Value == 1:
+        print(Tracking_1Value,Tracking_2Value,Tracking_3Value,Tracking_4Value,Tracking_5Value,Tracking_6Value,Tracking_7Value,Tracking_8Value)
+        runn(b'\x7B\x00\x00\x01\x00\x00\x00\xFC\x00\x86\x7D')
+        time.sleep(0.01)
+
+#1111 0011
+    elif Tracking_1Value == 1 and Tracking_2Value == 1 and Tracking_3Value == 1 and Tracking_4Value == 1 and Tracking_5Value == 0 and Tracking_6Value == 0 and Tracking_7Value == 1 and Tracking_8Value == 1:
+        print(Tracking_1Value,Tracking_2Value,Tracking_3Value,Tracking_4Value,Tracking_5Value,Tracking_6Value,Tracking_7Value,Tracking_8Value)
+        runn(b'\x7B\x00\x00\x01\x00\x00\x00\xFE\x00\x84\x7D')
+        time.sleep(0.01)
+
+#1111 1001
+    elif Tracking_1Value == 1 and Tracking_2Value == 1 and Tracking_3Value == 1 and Tracking_4Value == 1 and Tracking_5Value == 1 and Tracking_6Value == 0 and Tracking_7Value == 0 and Tracking_8Value == 1:
+        print(Tracking_1Value,Tracking_2Value,Tracking_3Value,Tracking_4Value,Tracking_5Value,Tracking_6Value,Tracking_7Value,Tracking_8Value)
+        runn(b'\x7B\x00\x00\x01\x00\x00\x00\xFD\x00\x87\x7D')
+        time.sleep(0.01)
+#1111 1100
+    elif Tracking_1Value == 1 and Tracking_2Value == 1 and Tracking_3Value == 1 and Tracking_4Value == 1 and Tracking_5Value == 1 and Tracking_6Value == 1 and Tracking_7Value == 0 and Tracking_8Value == 0:
+        print(Tracking_1Value,Tracking_2Value,Tracking_3Value,Tracking_4Value,Tracking_5Value,Tracking_6Value,Tracking_7Value,Tracking_8Value)
+        runn(b'\x7B\x00\x00\x01\x00\x00\x00\xFC\x00\x86\x7D')
+        time.sleep(0.01)
+#1111 1110
+    elif Tracking_1Value == 1 and Tracking_2Value == 1 and Tracking_3Value == 1 and Tracking_4Value == 1 and Tracking_5Value == 1 and Tracking_6Value == 1 and Tracking_7Value == 1 and Tracking_8Value == 0:
+        print(Tracking_1Value,Tracking_2Value,Tracking_3Value,Tracking_4Value,Tracking_5Value,Tracking_6Value,Tracking_7Value,Tracking_8Value)
+        runn(b'\x7B\x00\x00\x01\x00\x00\x00\xFB\x00\x81\x7D')
+        time.sleep(0.01)
+#1110 0011
+    elif Tracking_1Value == 1 and Tracking_2Value == 1 and Tracking_3Value == 1 and Tracking_4Value == 0 and Tracking_5Value == 0 and Tracking_6Value == 0 and Tracking_7Value == 1 and Tracking_8Value == 1:
+        print(Tracking_1Value,Tracking_2Value,Tracking_3Value,Tracking_4Value,Tracking_5Value,Tracking_6Value,Tracking_7Value,Tracking_8Value)
+        runn(b'\x7B\x00\x00\x01\x00\x00\x00\xFF\x00\x85\x7D')
+        time.sleep(0.01)
+#1111 0001
+    elif Tracking_1Value == 1 and Tracking_2Value == 1 and Tracking_3Value == 1 and Tracking_4Value == 1 and Tracking_5Value == 0 and Tracking_6Value == 0 and Tracking_7Value == 0 and Tracking_8Value == 1:
+        print(Tracking_1Value,Tracking_2Value,Tracking_3Value,Tracking_4Value,Tracking_5Value,Tracking_6Value,Tracking_7Value,Tracking_8Value)
+        runn(b'\x7B\x00\x00\x01\x00\x00\x00\xFF\x00\x85\x7D')
+        time.sleep(0.01)
+
+#
+    #四路循迹引脚电平状态
+    #1 0 0 1
+    #处理直线
+    if Tracking_1Value == 1 and Tracking_2Value == 1 and Tracking_3Value == 1 and Tracking_4Value == 0 and Tracking_5Value == 0 and Tracking_6Value == 1 and Tracking_7Value == 1 and Tracking_8Value == 1:
+        print(Tracking_1Value,Tracking_2Value,Tracking_3Value,Tracking_4Value,Tracking_5Value,Tracking_6Value,Tracking_7Value,Tracking_8Value)
+        runn(b'\x7B\x00\x00\x00\x60\x00\x00\x00\x00\x1B\x7D')
+        time.sleep(0.01)
+#
+    #当为1 1 1 1时小车直行
+    elif Tracking_1Value == 1 and Tracking_2Value == 1 and Tracking_3Value == 1 and Tracking_4Value == 0 and Tracking_5Value == 0 and Tracking_6Value == 1 and Tracking_7Value == 1 and Tracking_8Value == 1:
+        print(Tracking_1Value,Tracking_2Value,Tracking_3Value,Tracking_4Value,Tracking_5Value,Tracking_6Value,Tracking_7Value,Tracking_8Value)
+        run()
+        time.sleep(0.01)
+
+
+
+
+
+
+def cvResultMove(cvResult, teamColor):
+    if teamColor == 1:
+        if cvResult == RED_GREEN:
+            beginTime = time.time()
+            nowTime = time.time()
+#
+            while nowTime - beginTime < 0.8:
+                Tracking_1Value = GPIO.input(Tracking_1)
+                Tracking_2Value = GPIO.input(Tracking_2)
+                Tracking_3Value = GPIO.input(Tracking_3)
+                Tracking_4Value = GPIO.input(Tracking_4)
+                Tracking_5Value = GPIO.input(Tracking_5)
+                Tracking_6Value = GPIO.input(Tracking_6)
+                Tracking_7Value = GPIO.input(Tracking_7)
+                Tracking_8Value = GPIO.input(Tracking_8)
+                #print("imhere")
+                runn(b'\x7B\x00\x00\x00\x60\x00\x00\x00\x00\x1B\x7D')
+                time.sleep(1.8)
+                #if Tracking_1Value == 1 and Tracking_2Value == 1 and Tracking_3Value == 1 and Tracking_4Value == 0 and Tracking_5Value == 0 and Tracking_6Value == 1 and Tracking_7Value == 1 and Tracking_8Value == 1:
+                #    print(Tracking_1Value,Tracking_2Value,Tracking_3Value,Tracking_4Value,Tracking_5Value,Tracking_6Value,Tracking_7Value,Tracking_8Value)
+                #    run()
+                #    #print("1001lo")
+                #    time.sleep(0.01)
+                #
+#
+                    #当为1 1 1 1时小车直行
+                #elif Tracking_1Value == 1 and Tracking_2Value == 1 and Tracking_3Value == 1 and Tracking_4Value == 1 and Tracking_5Value == 1 and Tracking_6Value == 1 and Tracking_7Value == 1 and Tracking_8Value == 1:
+                #    runn(b'\x7B\x00\x00\x00\x60\x00\x00\x00\x00\x1B\x7D')
+                #    time.sleep(1)
+                #
+                nowTime = time.time()
+#
+            turnBack()
+            return
+        if cvResult == RED_YELLOW or cvResult == BLUE_GREEN or cvResult == BLUE_YELLOW:
+            turnBack()
+            return
+    if teamColor == 2:
+        if cvResult == BLUE_YELLOW:
+            beginTime = time.time()
+            nowTime = time.time()
+#
+            while nowTime - beginTime < 0.8:
+                Tracking_1Value = GPIO.input(Tracking_1)
+                Tracking_2Value = GPIO.input(Tracking_2)
+                Tracking_3Value = GPIO.input(Tracking_3)
+                Tracking_4Value = GPIO.input(Tracking_4)
+                Tracking_5Value = GPIO.input(Tracking_5)
+                Tracking_6Value = GPIO.input(Tracking_6)
+                Tracking_7Value = GPIO.input(Tracking_7)
+                Tracking_8Value = GPIO.input(Tracking_8)
+
+                runn(b'\x7B\x00\x00\x00\x60\x00\x00\x00\x00\x1B\x7D')
+                time.sleep(1.4)
+
+                #if Tracking_1Value == 1 and Tracking_2Value == 1 and Tracking_3Value == 1 and Tracking_4Value == 0 and Tracking_5Value == 0 and Tracking_6Value == 1 and Tracking_7Value == 1 and Tracking_8Value == 1:
+                #    print(Tracking_1Value,Tracking_2Value,Tracking_3Value,Tracking_4Value,Tracking_5Value,Tracking_6Value,Tracking_7Value,Tracking_8Value)
+                #    run()
+                #    time.sleep(0.01)
+#
+                    #当为1 1 1 1时小车直行
+                #elif Tracking_1Value == 1 and Tracking_2Value == 1 and Tracking_3Value == 1 and Tracking_4Value == 1 and Tracking_5Value == 1 and Tracking_6Value == 1 and Tracking_7Value == 1 and Tracking_8Value == 1:
+                #   runn(b'\x7B\x00\x00\x00\x60\x00\x00\x00\x00\x1B\x7D')
+                #   time.sleep(1)
+
+                nowTime = time.time()
+#
+            turnBack()
+            return
+        if cvResult == RED_YELLOW or cvResult == BLUE_GREEN or cvResult == RED_GREEN:
+            turnBack()
+            return
+#
+#
+stop()
+
+
